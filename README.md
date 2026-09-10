@@ -1,5 +1,7 @@
 # fly-brain
 
+![viewer](docs/viewer.png)
+
 Whole-brain spiking simulation of the adult *Drosophila* connectome (FlyWire v783: 138,639 neurons, 15.1 M weighted
 connections) with a live 3D viewer. Model and parameters follow Shiu et al. 2024 (*Nature*), "A Drosophila computational
 brain model reveals sensorimotor processing". Vocabulary is in `CONTEXT.md`.
@@ -16,9 +18,16 @@ uv run uvicorn flybrain.server:app --port 8420   # viewer at http://localhost:84
 
 ## Run on gpu1 (Docker)
 
+gpu1 has no GitHub credentials for this private repo, so sync the tree from dev1 (data included, saves the download):
+
 ```bash
-scripts/fetch_data.sh && docker compose up -d --build   # http://gpu1.lan:8420
+rsync -az --delete --exclude .venv --exclude .git -e "ssh -i ~/.ssh/homelab_ed25519" ./ millelog@gpu1.lan:apps/fly-brain/
+ssh -i ~/.ssh/homelab_ed25519 millelog@gpu1.lan 'cd apps/fly-brain && docker compose up -d --build'   # http://gpu1.lan:8420
 ```
+
+Measured, 1 s biological at dt 0.1 ms, sugar stimulus: GTX 1080 5.1 s wall, dev1 CPU (Ryzen 3600X) 7 s wall. The GPU is
+kernel-launch bound at this activity level; raising dt or batching trials is the lever if it ever matters. Image is 14 GB
+(CUDA wheels); container idles at ~1 GB RAM and 320 MB VRAM.
 
 ## How it works
 
