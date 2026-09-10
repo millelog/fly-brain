@@ -2,132 +2,153 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>fly-brain</title>
+<title>fly-brain arena</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  html, body { margin: 0; height: 100%; background: #05060a; color: #cfd3dc; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
-  #c { position: fixed; inset: 0; }
-  #panel { position: fixed; top: 12px; left: 12px; width: 280px; background: rgba(10,12,20,.85); border: 1px solid #222838; border-radius: 8px; padding: 12px; backdrop-filter: blur(6px); }
-  #panel h1 { font-size: 15px; margin: 0 0 8px; color: #fff; }
-  label { display: block; margin: 6px 0 2px; color: #8b93a7; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  select, input { width: 100%; box-sizing: border-box; background: #10131c; color: #e6e9f0; border: 1px solid #2a3145; border-radius: 4px; padding: 5px; }
-  .row { display: flex; gap: 6px; } .row > * { flex: 1; }
-  button { margin-top: 10px; padding: 7px; border: 0; border-radius: 4px; background: #3b82f6; color: #fff; font-weight: 600; cursor: pointer; }
-  button.stop { background: #ef4444; }
-  #readouts { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  html, body { margin: 0; height: 100%; background: #05060a; color: #cfd3dc; font: 12px/1.4 system-ui, sans-serif; overflow: hidden; }
+  #app { display: flex; height: 100%; }
+  #left { width: 42%; min-width: 280px; position: relative; display: flex; flex-direction: column; }
+  #divider { width: 6px; cursor: col-resize; background: #161a26; }
+  #divider:hover { background: #2a3145; }
+  #right { flex: 1; position: relative; min-width: 0; }
+  #arena { flex: 1; min-height: 0; display: block; width: 100%; cursor: crosshair; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .panel { background: rgba(10,12,20,.88); border: 1px solid #222838; border-radius: 8px; padding: 10px; backdrop-filter: blur(6px); }
+  #controls { margin: 8px; max-height: 38%; overflow-y: auto; }
+  #hud { position: absolute; top: 10px; left: 10px; pointer-events: none; white-space: pre-line; font-variant-numeric: tabular-nums; }
+  #bpanel { position: absolute; top: 10px; right: 10px; width: 250px; max-height: calc(100% - 20px); overflow-y: auto; }
+  #inspector { position: absolute; bottom: 10px; left: 10px; width: 300px; display: none; }
+  #inspector.on { display: block; }
+  h1 { font-size: 14px; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 11px; margin: 10px 0 4px; color: #8b93a7; text-transform: uppercase; letter-spacing: .05em; }
+  label { display: block; margin: 4px 0 1px; color: #8b93a7; font-size: 11px; }
+  select, input[type=number], input[type=text] { width: 100%; box-sizing: border-box; background: #10131c; color: #e6e9f0; border: 1px solid #2a3145; border-radius: 4px; padding: 4px; }
+  input[type=range] { width: 100%; margin: 0; }
+  .row { display: flex; gap: 6px; align-items: center; } .row > * { flex: 1; }
+  .g { display: grid; grid-template-columns: 70px 1fr 44px; gap: 2px 6px; align-items: center; }
+  .g span:last-child { text-align: right; color: #7dd3fc; font-variant-numeric: tabular-nums; }
+  button { padding: 5px 8px; border: 0; border-radius: 4px; background: #3b82f6; color: #fff; font-weight: 600; cursor: pointer; }
+  button.alt { background: #334155; } button.red { background: #ef4444; }
+  #readouts { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; font-variant-numeric: tabular-nums; }
   #readouts span:nth-child(3n) { text-align: right; color: #7dd3fc; }
-  #stats { margin-top: 10px; color: #8b93a7; font-size: 11px; white-space: pre-line; }
   .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  #stats { margin-top: 8px; color: #8b93a7; font-size: 11px; white-space: pre-line; }
+  #trace { width: 100%; height: 90px; display: block; background: #0a0c14; border-radius: 4px; margin-top: 6px; }
+  .hint { color: #5b6378; font-size: 11px; margin-top: 4px; }
+  #scrub { display: none; margin: 0 8px 8px; } #scrub.on { display: block; }
+  kbd { background: #1c2130; border-radius: 3px; padding: 0 4px; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="panel">
-  <h1>fly-brain <span style="color:#8b93a7;font-weight:400">FlyWire v783</span></h1>
-  <label>Stimulus population</label><select id="stim"></select>
-  <div class="row"><div><label>Rate (Hz)</label><input id="rate" type="number" value="150"></div>
-  <div><label>dt (ms)</label><input id="dt" type="number" value="0.1" step="0.1"></div>
-  <div><label>Frame (ms)</label><input id="win" type="number" value="10"></div></div>
-  <label>Readouts (ctrl-click)</label><select id="ro" multiple size="5"></select>
-  <button id="go">Start</button>
-  <div id="readouts"></div>
-  <div id="stats">loading…</div>
+<div id="app">
+  <div id="left">
+    <canvas id="arena"></canvas>
+    <div id="hud"></div>
+    <div id="scrub" class="row"><input id="seek" type="range" min="0" max="0" value="0"><span id="seekv" style="flex:0 0 90px">frame 0</span></div>
+    <div id="controls" class="panel">
+      <div class="row">
+        <button id="pause" class="alt">Pause</button><button id="reset" class="alt">Reset</button>
+        <button id="rec" class="alt">Record</button><button id="save" class="alt">Save</button>
+      </div>
+      <div class="hint">click to place · drag to move · right-drag fly: heading · <kbd>Del</kbd>: remove selected</div>
+      <div class="row" style="margin-top:6px"><div><label>Click places</label><select id="place"><option value="source">odor source</option><option value="patch">sugar patch (or shift-click)</option></select></div>
+        <div><label>Wind (deg, blank = none)</label><input id="wind" type="text" placeholder="none"></div>
+        <div><label>dt (ms, restarts)</label><input id="dt" type="number" value="0.1" step="0.1" min="0.1"></div></div>
+      <h2>Motor map &amp; sense</h2>
+      <div id="gains" class="g"></div>
+    </div>
+  </div>
+  <div id="divider"></div>
+  <div id="right">
+    <canvas id="c"></canvas>
+    <div id="bpanel" class="panel">
+      <h1>fly-brain <span style="color:#8b93a7;font-weight:400">FlyWire v783</span></h1>
+      <div id="stats">loading…</div>
+      <h2>Readouts</h2><select id="ro" multiple size="4"></select><div id="readouts" style="margin-top:6px"></div>
+      <h2>Poke</h2>
+      <div class="row"><select id="pokepop"></select><input id="pokerate" type="number" value="150" title="Hz"><input id="pokems" type="number" value="200" title="ms"><button id="poke">Poke</button></div>
+      <h2>Slice</h2>
+      <div class="g" id="slice"></div>
+      <label><input id="camclip" type="checkbox"> view-aligned slab</label>
+      <div class="g"><span>depth</span><input id="camd" type="range" min="-600" max="600" value="0"><span id="camdv">0</span>
+        <span>thickness</span><input id="camw" type="range" min="5" max="1200" value="60"><span id="camwv">60</span></div>
+      <h2>Opacity</h2>
+      <div class="g" id="opac"></div>
+      <label><input id="actonly" type="checkbox"> activity only</label>
+      <label><input id="isolate" type="checkbox"> isolate selection + partners + readouts</label>
+      <label><input id="rotate" type="checkbox" checked> auto-rotate</label>
+      <div id="hulls"></div>
+    </div>
+    <div id="inspector" class="panel">
+      <div class="row"><b id="ititle">neuron</b><button id="pin" class="alt" style="flex:0">Pin</button><button id="ipoke" class="alt" style="flex:0">Poke</button><button id="iclose" class="alt" style="flex:0">×</button></div>
+      <div id="ibody" style="white-space:pre-line;margin-top:4px"></div>
+      <canvas id="trace"></canvas>
+    </div>
+  </div>
 </div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as arena from '/static/arena.js';
+import * as brain from '/static/brain.js';
 
 const $ = id => document.getElementById(id);
 const meta = await (await fetch('/api/meta')).json();
 const xyz = new Float32Array(await (await fetch('/api/positions')).arrayBuffer());
-const N = meta.n;
+const TRAILER = 36; // <3f5fI
 
-// Only neurons with a soma get a vertex; vert[i] = vertex index or -1.
-const vert = new Int32Array(N).fill(-1); const pos = [];
-let cx = 0, cy = 0, cz = 0;
-for (let i = 0; i < N; i++) if (!Number.isNaN(xyz[3*i])) { vert[i] = pos.length / 3; pos.push(xyz[3*i]/1000, xyz[3*i+1]/1000, xyz[3*i+2]/1000); }
-const V = pos.length / 3;
-for (let v = 0; v < V; v++) { cx += pos[3*v]; cy += pos[3*v+1]; cz += pos[3*v+2]; }
-cx /= V; cy /= V; cz /= V;
-for (let v = 0; v < V; v++) { pos[3*v] -= cx; pos[3*v+1] = -(pos[3*v+1] - cy); pos[3*v+2] -= cz; }
+let ws;
+function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+brain.init({ meta, xyz, send });
+arena.init({ send, canvas: $('arena') });
 
-// Base color by super class, dim. Activity is added on top and decays.
-const palette = { optic: [.22,.24,.36], central: [.36,.30,.42], sensory: [.24,.40,.32], motor: [.55,.30,.20], descending: [.55,.45,.15], ascending: [.30,.45,.45] };
-const base = new Float32Array(V*3), col = new Float32Array(V*3), heat = new Float32Array(V);
-for (let i = 0; i < N; i++) { const v = vert[i]; if (v < 0) continue; const c = palette[meta.super_class[i]] || [.30,.30,.34]; base.set(c, 3*v); }
-const HOT = [1.0, 0.85, 0.35];
-function paintPop(indices, c) { for (const i of indices) if (vert[i] >= 0) base.set(c, 3*vert[i]); }
-
-const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true });
-renderer.setPixelRatio(devicePixelRatio);
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, 1, 1, 1e5);
-camera.position.set(0, 0, 420);
-const controls = new OrbitControls(camera, renderer.domElement); controls.autoRotate = true; controls.autoRotateSpeed = 0.4;
-const geo = new THREE.BufferGeometry();
-geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ size: 2.6, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: .9 })));
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
-addEventListener('resize', resize); resize();
-
-// Panel
-const pops = Object.keys(meta.populations);
-for (const p of pops) { $('stim').add(new Option(`${p} (${meta.populations[p].length})`, p)); $('ro').add(new Option(`${p} (${meta.populations[p].length})`, p)); }
-$('stim').value = 'shiu_sugar';
-for (const o of $('ro').options) o.selected = ['shiu_mn9','proboscis_mn','motor','descending'].includes(o.value);
-const roColors = ['#4ade80','#f472b6','#60a5fa','#facc15','#fb923c'];
-
-// Streaming
-let ws, bioT = 0, frames = 0, active = 0, t0 = 0, running = false;
-const hist = []; // recent frames for readout rates: {t, idx, cnt}
-const ROLL = 200; // ms window for readout Hz
-function readoutRates() {
-  const sel = [...$('ro').selectedOptions].map(o => o.value);
-  const tot = new Map(sel.map(s => [s, 0])); const sets = new Map(sel.map(s => [s, new Set(meta.populations[s])]));
-  const span = Math.min(ROLL, bioT || ROLL);
-  for (const f of hist) for (let k = 0; k < f.idx.length; k++) for (const s of sel) if (sets.get(s).has(f.idx[k])) tot.set(s, tot.get(s) + f.cnt[k]);
-  $('readouts').innerHTML = sel.map((s, j) => `<span><i class="sw" style="background:${roColors[j%5]}"></i></span><span>${s}</span><span>${(tot.get(s) / meta.populations[s].length * 1000 / span).toFixed(1)} Hz</span>`).join('');
-}
-function stats() {
-  const wall = (performance.now() - t0) / 1000;
-  $('stats').textContent = `${meta.device} · ${N.toLocaleString()} neurons, ${meta.no_soma.toLocaleString()} without soma (hidden)\nbio ${(bioT/1000).toFixed(2)} s · wall ${wall.toFixed(1)} s · ${running ? (wall / (bioT/1000||1)).toFixed(1) + ' s/bio-s' : 'idle'}\nactive last frame: ${active}`;
-}
 function onFrame(buf) {
   const dv = new DataView(buf); const t = dv.getFloat32(0, true), n = dv.getUint32(4, true);
-  const idx = new Uint32Array(buf.slice(8, 8 + 4*n)), cnt = new Uint16Array(buf.slice(8 + 4*n, 8 + 6*n));
-  bioT = t; frames++; active = n;
-  for (let k = 0; k < n; k++) { const v = vert[idx[k]]; if (v >= 0) heat[v] = Math.min(1, heat[v] + 0.4 * cnt[k]); }
-  hist.push({ t, idx, cnt }); while (hist.length && hist[0].t < t - ROLL) hist.shift();
-  if (frames % 5 === 0) { readoutRates(); stats(); }
-}
-function start() {
-  const sel = [...$('ro').selectedOptions].map(o => o.value);
-  base.fill(0); for (let i = 0; i < N; i++) { const v = vert[i]; if (v >= 0) base.set(palette[meta.super_class[i]] || [.30,.30,.34], 3*v); }
-  sel.forEach((s, j) => { const c = new THREE.Color(roColors[j%5]); paintPop(meta.populations[s], [c.r, c.g, c.b]); });
-  paintPop(meta.populations[$('stim').value], [.3, .9, 1]);
-  heat.fill(0); hist.length = 0; bioT = 0; frames = 0; t0 = performance.now(); running = true;
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`); ws.binaryType = 'arraybuffer';
-  ws.onopen = () => ws.send(JSON.stringify({ cmd: 'start', stimuli: { [$('stim').value]: +$('rate').value }, dt: +$('dt').value, window: +$('win').value }));
-  ws.onmessage = e => { if (e.data instanceof ArrayBuffer) onFrame(e.data); else stop(); };
-  ws.onclose = () => { running = false; stats(); };
-  $('go').textContent = 'Stop'; $('go').className = 'stop';
-}
-function stop() { if (ws) { ws.send(JSON.stringify({ cmd: 'stop' })); ws.close(); } running = false; $('go').textContent = 'Start'; $('go').className = ''; stats(); }
-$('go').onclick = () => running ? stop() : start();
-stats();
-
-// Render loop: decay heat, blend color.
-const colorAttr = geo.getAttribute('color');
-(function loop() {
-  requestAnimationFrame(loop);
-  for (let v = 0; v < V; v++) {
-    const h = heat[v]; heat[v] = h * 0.9;
-    col[3*v] = base[3*v] + h * (HOT[0] - base[3*v]); col[3*v+1] = base[3*v+1] + h * (HOT[1] - base[3*v+1]); col[3*v+2] = base[3*v+2] + h * (HOT[2] - base[3*v+2]);
+  const idx = new Uint32Array(buf.slice(8, 8 + 4 * n)), cnt = new Uint16Array(buf.slice(8 + 4 * n, 8 + 6 * n));
+  brain.onFrame(t, idx, cnt);
+  const o = 8 + 6 * n;
+  if (buf.byteLength >= o + TRAILER) {
+    const f = [], dv2 = new DataView(buf, o);
+    for (let k = 0; k < 8; k++) f.push(dv2.getFloat32(4 * k, true));
+    arena.onFrame(t, { x: f[0], y: f[1], th: f[2], dnp09: f[3], mdn: f[4], dna02_l: f[5], dna02_r: f[6], mn9: f[7], feeds: dv2.getUint32(32, true) });
   }
-  colorAttr.needsUpdate = true; controls.update(); renderer.render(scene, camera);
-})();
+}
+function connect() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`); ws.binaryType = 'arraybuffer';
+  ws.onmessage = e => e.data instanceof ArrayBuffer ? onFrame(e.data) : onState(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+connect();
+
+// --- state → controls ---
+const GAIN_HELP = { g_f: 'fwd mm/s per Hz DNp09', g_b: 'back mm/s per Hz MDN', g_t: 'rad/s per Hz DNa02 L−R', v_base: 'base speed mm/s', vmax: 'speed cap mm/s',
+  noise: 'heading noise rad/s', r0: 'ORN spontaneous Hz', r_max: 'ORN max Hz', k: 'odor half-saturation', antenna: 'antenna spacing mm', mn9_thr: 'feed threshold Hz' };
+const GAIN_MAX = { g_f: 1, g_b: 1, g_t: 0.5, v_base: 30, vmax: 100, noise: 5, r0: 20, r_max: 300, k: 2, antenna: 10, mn9_thr: 100 };
+let built = false;
+function onState(s) {
+  arena.setState(s);
+  if (!built && s.gains) {
+    built = true;
+    $('gains').innerHTML = Object.keys(s.gains).map(k => `<span title="${GAIN_HELP[k] || ''}">${k}</span><input type="range" data-k="${k}" min="0" max="${GAIN_MAX[k] || 1}" step="${(GAIN_MAX[k] || 1) / 200}" value="${s.gains[k]}"><span id="gv_${k}">${s.gains[k]}</span>`).join('');
+    $('gains').oninput = e => { const k = e.target.dataset.k; $('gv_' + k).textContent = e.target.value; send({ cmd: 'gains', [k]: +e.target.value }); };
+    $('wind').value = s.wind == null ? '' : (s.wind * 180 / Math.PI).toFixed(0);
+    $('dt').value = s.dt;
+  }
+  if (s.gains && document.activeElement?.dataset?.k === undefined) for (const k in s.gains) { const el = $('gains').querySelector(`[data-k=${k}]`); if (el) { el.value = s.gains[k]; $('gv_' + k).textContent = s.gains[k]; } }
+  $('pause').textContent = s.paused ? 'Resume' : 'Pause'; $('pause').dataset.on = s.paused ? 1 : 0;
+  if (meta.replay) { $('scrub').classList.add('on'); $('seek').max = s.frames - 1; if (document.activeElement !== $('seek')) $('seek').value = s.frame; $('seekv').textContent = `frame ${s.frame}/${s.frames}`; }
+}
+$('pause').onclick = () => send({ cmd: 'pause', on: $('pause').dataset.on !== '1' });
+$('reset').onclick = () => send({ cmd: 'reset' });
+$('rec').onclick = () => { const on = $('rec').classList.toggle('red'); $('rec').textContent = on ? 'Recording' : 'Record'; send({ cmd: 'record', on }); };
+$('save').onclick = () => { const p = prompt('save recording to (server path)', 'trial.npz'); if (p) send({ cmd: 'save', path: p }); };
+$('wind').onchange = () => send({ cmd: 'wind', dir: $('wind').value === '' ? null : +$('wind').value * Math.PI / 180 });
+$('dt').onchange = () => send({ cmd: 'reset', dt: +$('dt').value });
+$('seek').oninput = () => send({ cmd: 'seek', frame: +$('seek').value });
+
+// --- divider ---
+const div = $('divider'), left = $('left');
+div.onpointerdown = e => { div.setPointerCapture(e.pointerId); div.onpointermove = ev => { left.style.width = Math.max(200, ev.clientX) + 'px'; arena.resize(); brain.resize(); }; };
+div.onpointerup = () => { div.onpointermove = null; };
 </script>
 </body>
 </html>

@@ -35,6 +35,19 @@ def load_weights(device="cpu", min_synapses=1):
     return torch.tensor(ptr, device=device), post, w
 
 
+VOXEL_UM = np.array([4, 4, 40], dtype=np.float32) / 1000  # annotations are in FlyWire 4x4x40 nm voxels
+
+
 def soma_xyz(neurons: pd.DataFrame) -> np.ndarray:
-    """(N, 3) float32 soma positions in nm; NaN rows for neurons without a soma."""
-    return neurons[["soma_x", "soma_y", "soma_z"]].to_numpy(dtype=np.float32)
+    """(N, 3) float32 soma positions in µm; NaN rows for neurons without a soma."""
+    return neurons[["soma_x", "soma_y", "soma_z"]].to_numpy(dtype=np.float32) * VOXEL_UM
+
+
+def reverse_csr(ptr, post, w):
+    """CSR by postsynaptic neuron: (ptr_in, pre, w_in), for looking up a neuron's inputs."""
+    n = len(ptr) - 1
+    order = torch.argsort(post, stable=True)
+    pre = torch.repeat_interleave(torch.arange(n, device=ptr.device), ptr[1:] - ptr[:-1])[order]
+    ptr_in = torch.zeros(n + 1, dtype=ptr.dtype, device=ptr.device)
+    ptr_in[1:] = torch.cumsum(torch.bincount(post, minlength=n), 0)
+    return ptr_in, pre, w[order]

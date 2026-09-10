@@ -24,6 +24,11 @@ REGISTRY: dict[str, str | list[int]] = {
     "dna02": "cell_type == 'DNa02'",
     "dnp09": "cell_type == 'DNp09'",
     "mdn": "cell_type == 'MDN'",
+    "dna02_l": "cell_type == 'DNa02' and side == 'left'",
+    "dna02_r": "cell_type == 'DNa02' and side == 'right'",
+    "orn_food_l": "cell_type in ['ORN_DM1', 'ORN_DM2', 'ORN_DM4', 'ORN_VA2'] and side == 'left'",
+    "orn_food_r": "cell_type in ['ORN_DM1', 'ORN_DM2', 'ORN_DM4', 'ORN_VA2'] and side == 'right'",
+    "orn": "cell_class == 'olfactory'",
 }
 
 

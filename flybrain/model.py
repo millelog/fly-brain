@@ -48,15 +48,21 @@ class Brain:
     def pop(self, name):
         return populations.resolve(name, self.neurons)
 
-    def frames(self, duration_ms, stimuli: dict[str, float], window_ms=10.0, seed=0):
-        """Yield Frames (t_ms, idx, counts) every `window_ms`. `stimuli` maps Population name -> Poisson rate in Hz."""
+    def rate_tensor(self, stimuli: dict[str, float]) -> torch.Tensor:
+        """(N,) Poisson rate in Hz per neuron from a Population -> Hz map."""
+        rate = torch.zeros(self.n, device=self.device)
+        for k, r in stimuli.items():
+            rate[torch.tensor(self.pop(k), device=self.device)] = r
+        return rate
+
+    def frames(self, duration_ms, stimuli: dict[str, float] | torch.Tensor, window_ms=10.0, seed=0):
+        """Yield Frames (t_ms, idx, counts) every `window_ms`. `stimuli` maps Population name -> Poisson rate in Hz,
+        or is an (N,) Hz tensor the caller may mutate in place between Frames (closed loop)."""
         p, n, dev = self.p, self.n, self.device
+        rate = stimuli if torch.is_tensor(stimuli) else self.rate_tensor(stimuli)
         gen = torch.Generator(device=dev).manual_seed(seed)
         steps, D = round(duration_ms / p.dt), round(p.t_delay / p.dt)
-        refrac_steps = torch.full((n,), round(p.t_refrac / p.dt), device=dev)
-        stim_idx = torch.cat([torch.tensor(self.pop(k), device=dev) for k in stimuli]) if stimuli else torch.empty(0, dtype=torch.long, device=dev)
-        stim_p = torch.cat([torch.full((len(self.pop(k)),), r * p.dt / 1000.0, device=dev) for k, r in stimuli.items()]) if stimuli else None
-        refrac_steps[stim_idx] = 0  # Shiu: no refractory period for stimulated neurons
+        R = round(p.t_refrac / p.dt)
 
         v = torch.full((n,), p.v0, device=dev)
         g = torch.zeros(n, device=dev)
@@ -67,12 +73,16 @@ class Brain:
         a_syn, a_mem = p.dt / p.tau_syn, p.dt / p.tau_m
 
         for t in range(steps):
+            if t % win_steps == 0:  # re-arm stimulus from the (possibly mutated) rate tensor
+                stim_idx = rate.nonzero().squeeze(1)
+                stim_p = (rate[stim_idx] * p.dt / 1000.0).clamp_(max=1.0)
+                refrac_steps = torch.where(rate > 0, 0, R)  # Shiu: no refractory period for stimulated neurons
             active = refrac <= 0
             delayed = ring[t % (D + 1)]
             syn_in = self.synaptic_input(delayed)
             g = torch.where(active, g - a_syn * g, g) + syn_in  # on_pre applies even while refractory
             v = torch.where(active, v + a_mem * (p.v0 - v + g), v)
-            if stim_p is not None:
+            if len(stim_idx):
                 v[stim_idx] += p.stim_kick * torch.bernoulli(stim_p, generator=gen)
             spk = (v > p.vth) & active
             v = torch.where(spk, torch.full_like(v, p.v0), v)
@@ -85,11 +95,16 @@ class Brain:
                 yield (t + 1) * p.dt, idx.cpu().numpy(), counts[idx].cpu().numpy().astype(np.uint16)
                 counts.zero_()
 
-    def rates(self, duration_ms, stimuli, readouts: list[str], **kw) -> dict[str, float]:
-        """Mean firing rate (Hz) per Readout Population over a Trial."""
+    def totals(self, duration_ms, stimuli, **kw) -> np.ndarray:
+        """Spike count per neuron over a Trial."""
         total = np.zeros(self.n)
         for _, idx, c in self.frames(duration_ms, stimuli, **kw):
             total[idx] += c
+        return total
+
+    def rates(self, duration_ms, stimuli, readouts: list[str], **kw) -> dict[str, float]:
+        """Mean firing rate (Hz) per Readout Population over a Trial."""
+        total = self.totals(duration_ms, stimuli, **kw)
         return {r: float(total[self.pop(r)].mean() * 1000.0 / duration_ms) for r in readouts}
 
 
