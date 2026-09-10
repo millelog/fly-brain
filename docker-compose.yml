@@ -1,0 +1,14 @@
+services:
+  flybrain:
+    build: .
+    container_name: flybrain
+    restart: unless-stopped
+    ports: ["8420:8420"]
+    volumes: ["./data:/app/data:ro"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
