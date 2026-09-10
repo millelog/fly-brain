@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import data, populations
 from .model import Brain
-from .world import TRAILER, World, pack_frame
+from .world import CHANNELS, TRAILER, World, pack_frame
 
 app = FastAPI()
 STATIC = Path(__file__).parent / "static"
@@ -62,7 +62,7 @@ def run_replay():
         if n == 0:
             time.sleep(0.1); continue
         a, b = r["offsets"][k], r["offsets"][k + 1]
-        buf = pack_frame(float(r["t"][k]), r["idx"][a:b], r["counts"][a:b]) + struct.pack(TRAILER, *r["pose"][k], *r["ema"][k], int(r["feeds"][k]))
+        buf = pack_frame(float(r["t"][k]), r["idx"][a:b], r["counts"][a:b]) + struct.pack(TRAILER, *r["trail"][k], int(r["feeds"][k]))
         loop.call_soon_threadsafe(push, buf)
         if k % 100 == 0:
             st = dict(state, t=float(r["t"][k]), frames=n, frame=k)
@@ -103,9 +103,8 @@ def positions():
 
 @app.get("/api/meta")
 def meta():
-    xyz = data.soma_xyz(brain.neurons)
     return {
-        "n": brain.n, "device": str(brain.device), "no_soma": int(np.isnan(xyz[:, 0]).sum()), "replay": replay is not None,
+        "n": brain.n, "device": str(brain.device), "no_soma": int(brain.neurons["soma_x"].isna().sum()), "replay": replay is not None, "channels": CHANNELS,
         "super_class": brain.neurons["super_class"].fillna("unknown").tolist(),
         "populations": {k: brain.pop(k).tolist() for k in populations.REGISTRY},
     }

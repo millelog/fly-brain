@@ -14,8 +14,10 @@
   #arena { flex: 1; min-height: 0; display: block; width: 100%; cursor: crosshair; }
   #c { position: absolute; inset: 0; width: 100%; height: 100%; }
   .panel { background: rgba(10,12,20,.88); border: 1px solid #222838; border-radius: 8px; padding: 10px; backdrop-filter: blur(6px); }
-  #controls { margin: 8px; max-height: 38%; overflow-y: auto; }
+  #controls { margin: 8px; max-height: 30%; overflow-y: auto; }
   #hud { position: absolute; top: 10px; left: 10px; pointer-events: none; white-space: pre-line; font-variant-numeric: tabular-nums; }
+  #tip { position: fixed; z-index: 2; pointer-events: none; white-space: pre-line; background: rgba(10,12,20,.92); border: 1px solid #2a3145; border-radius: 4px; padding: 4px 6px; font-size: 11px; }
+  #strip { display: block; width: 100%; margin: 0 8px; width: calc(100% - 16px); border-radius: 4px; background: #0a0c14; }
   #bpanel { position: absolute; top: 10px; right: 10px; width: 250px; max-height: calc(100% - 20px); overflow-y: auto; }
   #inspector { position: absolute; bottom: 10px; left: 10px; width: 300px; display: none; }
   #inspector.on { display: block; }
@@ -44,17 +46,22 @@
   <div id="left">
     <canvas id="arena"></canvas>
     <div id="hud"></div>
+    <div id="tip" hidden></div>
+    <canvas id="strip"></canvas>
     <div id="scrub" class="row"><input id="seek" type="range" min="0" max="0" value="0"><span id="seekv" style="flex:0 0 90px">frame 0</span></div>
     <div id="controls" class="panel">
       <div class="row">
         <button id="pause" class="alt">Pause</button><button id="reset" class="alt">Reset</button>
         <button id="rec" class="alt">Record</button><button id="save" class="alt">Save</button>
       </div>
-      <div class="hint">click to place · drag to move · right-drag fly: heading · <kbd>Del</kbd>: remove selected</div>
-      <div class="row" style="margin-top:6px"><div><label>Click places</label><select id="place"><option value="source">odor source</option><option value="patch">sugar patch (or shift-click)</option></select></div>
+      <div class="hint">click floor to place · drag to move · drag empty space to orbit · right-drag fly: heading · click a body part: its neurons · <kbd>Del</kbd>: remove selected</div>
+      <div class="row" style="margin-top:6px"><div><label>Click places</label><select id="place"><option value="source">odor source</option><option value="patch">sugar patch (or shift-click)</option><option value="pillar">pillar</option><option value="light">light</option></select></div>
+        <div><label>z of selected (mm)</label><input id="selz" type="number" step="1" disabled></div>
+        <div><label>Camera</label><label style="margin:0;color:#e6e9f0"><input id="chase" type="checkbox"> chase the fly</label></div></div>
+      <div class="row" style="margin-top:6px">
         <div><label>Wind (deg, blank = none)</label><input id="wind" type="text" placeholder="none"></div>
         <div><label>dt (ms, restarts)</label><input id="dt" type="number" value="0.1" step="0.1" min="0.1"></div></div>
-      <h2>Motor map &amp; sense</h2>
+      <h2>Motor map &amp; senses</h2>
       <div id="gains" class="g"></div>
     </div>
   </div>
@@ -74,7 +81,9 @@
         <span>thickness</span><input id="camw" type="range" min="5" max="1200" value="60"><span id="camwv">60</span></div>
       <h2>Opacity</h2>
       <div class="g" id="opac"></div>
-      <label><input id="actonly" type="checkbox"> activity only</label>
+      <label><input id="actonly" type="checkbox" checked> activity only</label>
+      <div class="g"><span>glow ms</span><input id="tau" type="range" min="10" max="500" value="40"><span id="tauv">40</span>
+        <span>floor</span><input id="floor" type="range" min="0" max=".3" step=".01" value=".06"><span id="floorv">0.06</span></div>
       <label><input id="isolate" type="checkbox"> isolate selection + partners + readouts</label>
       <label><input id="rotate" type="checkbox" checked> auto-rotate</label>
       <div id="hulls"></div>
@@ -94,12 +103,12 @@ import * as brain from '/static/brain.js';
 const $ = id => document.getElementById(id);
 const meta = await (await fetch('/api/meta')).json();
 const xyz = new Float32Array(await (await fetch('/api/positions')).arrayBuffer());
-const TRAILER = 36; // <3f5fI
+const NAMES = [...meta.channels.pose, ...meta.channels.sense, ...meta.channels.motor], TRAILER = 4 * NAMES.length + 4; // floats + uint32 feeds
 
 let ws;
 function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 brain.init({ meta, xyz, send });
-arena.init({ send, canvas: $('arena') });
+arena.init({ send, canvas: $('arena'), meta, highlight: brain.setHighlight });
 
 function onFrame(buf) {
   const dv = new DataView(buf); const t = dv.getFloat32(0, true), n = dv.getUint32(4, true);
@@ -107,9 +116,9 @@ function onFrame(buf) {
   brain.onFrame(t, idx, cnt);
   const o = 8 + 6 * n;
   if (buf.byteLength >= o + TRAILER) {
-    const f = [], dv2 = new DataView(buf, o);
-    for (let k = 0; k < 8; k++) f.push(dv2.getFloat32(4 * k, true));
-    arena.onFrame(t, { x: f[0], y: f[1], th: f[2], dnp09: f[3], mdn: f[4], dna02_l: f[5], dna02_r: f[6], mn9: f[7], feeds: dv2.getUint32(32, true) });
+    const f = {}, dv2 = new DataView(buf, o);  // DataView: the offset is only 2-byte aligned when n is odd
+    NAMES.forEach((k, i) => f[k] = dv2.getFloat32(4 * i, true)); f.feeds = dv2.getUint32(4 * NAMES.length, true);
+    arena.onFrame(t, f);
   }
 }
 function connect() {
@@ -121,8 +130,10 @@ connect();
 
 // --- state → controls ---
 const GAIN_HELP = { g_f: 'fwd mm/s per Hz DNp09', g_b: 'back mm/s per Hz MDN', g_t: 'rad/s per Hz DNa02 L−R', v_base: 'base speed mm/s', vmax: 'speed cap mm/s',
-  noise: 'heading noise rad/s', r0: 'ORN spontaneous Hz', r_max: 'ORN max Hz', k: 'odor half-saturation', antenna: 'antenna spacing mm', mn9_thr: 'feed threshold Hz' };
-const GAIN_MAX = { g_f: 1, g_b: 1, g_t: 0.5, v_base: 30, vmax: 100, noise: 5, r0: 20, r_max: 300, k: 2, antenna: 10, mn9_thr: 100 };
+  noise: 'heading noise rad/s', g_lift: 'climb mm/s per Hz DNg02', sink: 'descent mm/s with no lift', body: 'collision radius mm',
+  r0: 'ORN spontaneous Hz', r_max: 'ORN max Hz', k: 'odor half-saturation', antenna: 'antenna spacing mm', wind_v: 'wind speed mm/s', g_wind: 'JO Hz per mm/s airspeed',
+  ambient: 'R1-6 Hz in the dark', r_light: 'R1-6 Hz per unit brightness', bristle_hz: 'bristle Hz while touching', mn9_thr: 'feed threshold Hz' };
+const GAIN_MAX = { g_f: 1, g_b: 1, g_t: 0.5, v_base: 30, vmax: 100, noise: 5, g_lift: 5, sink: 20, body: 5, r0: 20, r_max: 300, k: 2, antenna: 10, wind_v: 50, g_wind: 10, ambient: 50, r_light: 300, bristle_hz: 300, mn9_thr: 100 };
 let built = false;
 function onState(s) {
   arena.setState(s);

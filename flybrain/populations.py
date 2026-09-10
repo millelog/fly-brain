@@ -29,6 +29,17 @@ REGISTRY: dict[str, str | list[int]] = {
     "orn_food_l": "cell_type in ['ORN_DM1', 'ORN_DM2', 'ORN_DM4', 'ORN_VA2'] and side == 'left'",
     "orn_food_r": "cell_type in ['ORN_DM1', 'ORN_DM2', 'ORN_DM4', 'ORN_VA2'] and side == 'right'",
     "orn": "cell_class == 'olfactory'",
+    "dng02": "cell_type in ['DNg02_a', 'DNg02_b']",  # wingbeat-amplitude DNs (Namiki 2022); _c.._h unscreened
+    "jo_wind_l": "cell_sub_class == 'wind_gravity' and side == 'left'",
+    "jo_wind_r": "cell_sub_class == 'wind_gravity' and side == 'right'",
+    "r16_l": "cell_type == 'R1-6' and side == 'left'",
+    "r16_r": "cell_type == 'R1-6' and side == 'right'",
+    "bristle_l": "cell_sub_class == 'head bristle' and side == 'left'",
+    "bristle_r": "cell_sub_class == 'head bristle' and side == 'right'",
+    "neck_l": "cell_sub_class == 'neck_motor_neuron' and side == 'left'",
+    "neck_r": "cell_sub_class == 'neck_motor_neuron' and side == 'right'",
+    "antmn_l": "cell_sub_class == 'antennal_motor_neuron' and side == 'left'",
+    "antmn_r": "cell_sub_class == 'antennal_motor_neuron' and side == 'right'",
 }
 
 

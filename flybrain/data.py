@@ -39,8 +39,10 @@ VOXEL_UM = np.array([4, 4, 40], dtype=np.float32) / 1000  # annotations are in F
 
 
 def soma_xyz(neurons: pd.DataFrame) -> np.ndarray:
-    """(N, 3) float32 soma positions in µm; NaN rows for neurons without a soma."""
-    return neurons[["soma_x", "soma_y", "soma_z"]].to_numpy(dtype=np.float32) * VOXEL_UM
+    """(N, 3) float32 positions in µm: the soma, else a point on the arbor (sensory afferents have no soma)."""
+    soma = neurons[["soma_x", "soma_y", "soma_z"]].to_numpy(dtype=np.float32)
+    arbor = neurons[["pos_x", "pos_y", "pos_z"]].to_numpy(dtype=np.float32)
+    return np.where(np.isnan(soma), arbor, soma) * VOXEL_UM
 
 
 def reverse_csr(ptr, post, w):
